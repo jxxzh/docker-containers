@@ -1,0 +1,13 @@
+services:
+  app:
+    image: node:22-alpine
+    command: ["sh", "-c", "sleep infinity"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres18:5432/${APP_POSTGRES_DB:-project_a}
+      REDIS_URL: redis://redis:6379
+    networks:
+      - local-infra
+
+networks:
+  local-infra:
+    external: true
