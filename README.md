@@ -38,11 +38,15 @@ cp .env.example .env
 POSTGRES_PORT=5432
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=change-me
+POSTGRES_DB=postgres
 REDIS_PORT=6379
+REDIS_PASSWORD=
 TZ=Asia/Shanghai
 ```
 
 建议你至少修改 `POSTGRES_PASSWORD`。如果这台机器不是你个人独占使用，建议把它当成必须项。
+`POSTGRES_DB` 用于首次初始化时创建默认数据库；建议保留为 `postgres`，业务库按项目单独创建。
+`REDIS_PASSWORD` 默认留空，表示本机开发环境下不启用认证；如果你要启用认证，填入密码后重建 Redis 容器即可。
 
 ## 启动
 
@@ -99,10 +103,10 @@ Password: ${POSTGRES_PASSWORD}
 默认连接串：
 
 ```text
-postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:${POSTGRES_PORT}/${POSTGRES_USER}
+postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:${POSTGRES_PORT}/${POSTGRES_DB}
 ```
 
-因为没有显式设置 `POSTGRES_DB`，官方镜像会在首次初始化时创建与 `POSTGRES_USER` 同名的默认数据库。
+这里的默认数据库来自 `POSTGRES_DB`，仅在首次初始化数据目录时创建。
 
 ### Redis
 
@@ -115,6 +119,12 @@ Port: ${REDIS_PORT}
 
 ```text
 redis://localhost:${REDIS_PORT}
+```
+
+如果设置了 `REDIS_PASSWORD`，则连接串应写成：
+
+```text
+redis://:${REDIS_PASSWORD}@localhost:${REDIS_PORT}
 ```
 
 ## Docker 项目如何连接
@@ -141,7 +151,7 @@ networks:
     external: true
 ```
 
-完整的最小接入示例见 `consumer-compose.example.yaml:1`。这个示例默认读取当前 shell 环境里的 `POSTGRES_USER`、`POSTGRES_PASSWORD` 和 `APP_POSTGRES_DB`；如果没有提供，就回退到 `postgres`、`change-me` 和 `project_a`。
+完整的最小接入示例见 `consumer-compose.example.yaml:1`。这个示例默认读取当前 shell 环境里的 `POSTGRES_USER`、`POSTGRES_PASSWORD`、`APP_POSTGRES_DB` 和 `APP_REDIS_URL`；如果没有提供，就回退到 `postgres`、`change-me`、`project_a` 和 `redis://redis:6379`。
 
 ## 为不同项目创建独立数据库
 
@@ -199,7 +209,10 @@ docker volume rm local-containers_redis_data
 ## 重要说明
 
 - `POSTGRES_USER` 和 `POSTGRES_PASSWORD` 主要在首次初始化数据目录时生效。
+- `POSTGRES_DB` 也是首次初始化数据目录时生效，用来创建默认数据库。
 - 如果数据卷已经存在，后续修改这些变量不会自动重建用户或重置密码。
-- 如果数据卷已经存在但你改了 `.env` 里的 `POSTGRES_USER`，容器本身可能仍能启动，但健康检查和示例连接命令可能会因为新用户名并不存在而失败。
+- 如果数据卷已经存在但你改了 `.env` 里的 `POSTGRES_USER` 或 `POSTGRES_DB`，容器本身可能仍能启动，但健康检查和示例连接命令可能会因为新用户或新库并不存在而失败。
 - 如果你想重新初始化整个 PostgreSQL，需要先停止容器并删除对应的数据卷。
-- Redis 这里没有开启密码，默认适合本机单人开发环境；如果你的机器会暴露给其他人使用，建议不要直接开放到不受信任的网络环境。
+- `REDIS_PASSWORD` 留空时，Redis 不启用认证，适合本机单人开发环境。
+- 如果你启用了 `REDIS_PASSWORD`，其他项目的连接串也要同步改成 `redis://:${REDIS_PASSWORD}@host:port`。
+- Redis 修改密码后通常需要重建容器，避免运行参数和文档不一致。

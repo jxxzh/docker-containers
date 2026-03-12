@@ -9,6 +9,7 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
       TZ: ${TZ}
       PGTZ: ${TZ}
     ports:
@@ -16,7 +17,7 @@ services:
     volumes:
       - postgres18_data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB:-postgres}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -28,13 +29,28 @@ services:
     image: redis:7-alpine
     container_name: redis
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    command:
+      - sh
+      - -c
+      - |
+        if [ -n "${REDIS_PASSWORD:-}" ]; then
+          exec redis-server --appendonly yes --requirepass "${REDIS_PASSWORD}"
+        else
+          exec redis-server --appendonly yes
+        fi
     ports:
       - "${REDIS_PORT}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test:
+        - CMD-SHELL
+        - |
+          if [ -n "${REDIS_PASSWORD:-}" ]; then
+            redis-cli -a "${REDIS_PASSWORD}" ping
+          else
+            redis-cli ping
+          fi
       interval: 10s
       timeout: 5s
       retries: 5
