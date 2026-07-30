@@ -1,15 +1,16 @@
-# 本机全局共享 PostgreSQL 18 / Redis
+# 本机全局共享 PostgreSQL 18 / Redis / Temporal
 
 这个目录用于启动一组本机长期运行的基础容器，当前包含：
 
 - PostgreSQL 18
-- Redis 7
+- Redis 8
+- Temporal CLI dev server（含 UI）
 
 它们的定位是给多个本地项目共用，而不是每个项目各自启动一套。
 
 ## 文件说明
 
-- `docker-compose.yaml`：定义全局共享的 `postgres18` 和 `redis` 服务。
+- `docker-compose.yaml`：定义全局共享的 `postgres18`、`redis` 和 `temporal` 服务。
 - `.env`：本机实际使用的启动参数。
 - `.env.example`：环境变量模板，新机器可以先复制它生成 `.env`。
 - `consumer-compose.example.yaml`：其他 Docker 项目接入这套共享基础设施的最小示例。
@@ -18,9 +19,14 @@
 
 - PostgreSQL 通过 `localhost:${POSTGRES_PORT}` 提供给宿主机项目使用。
 - Redis 通过 `localhost:${REDIS_PORT}` 提供给宿主机项目使用。
-- 同时保留 `local-infra` 网络，方便其他 Docker 容器加入同一个网络后访问 `postgres18:5432` 和 `redis:6379`。
+- Temporal 通过 `localhost:${TEMPORAL_GRPC_PORT}` 提供 gRPC，通过
+  `localhost:${TEMPORAL_UI_PORT}` 提供本地 UI。
+- 同时保留 `local-infra` 网络，方便其他 Docker 容器加入同一个网络后访问
+  `postgres18:5432`、`redis:6379` 和 `temporal:7233`。
 - PostgreSQL 不预置业务数据库，适合多个项目共用一个实例后自行建库。
 - PostgreSQL 和 Redis 都使用 Docker 命名卷持久化数据。
+- Temporal 使用 SQLite 命名卷持久化本地 Workflow、Schedule 和 History。
+- 多个项目共享 Temporal 实例，但必须分别使用独立 Namespace、Task Queue 和 Worker。
 - PostgreSQL 18 按官方推荐方式挂载到 `/var/lib/postgresql`。
 - Redis 使用 `appendonly yes`，更适合本机共享开发场景，重启后不容易丢最近写入的数据。
 
@@ -41,6 +47,8 @@ POSTGRES_PASSWORD=change-me
 POSTGRES_DB=postgres
 REDIS_PORT=6379
 REDIS_PASSWORD=
+TEMPORAL_GRPC_PORT=7233
+TEMPORAL_UI_PORT=8233
 TZ=Asia/Shanghai
 ```
 
@@ -68,6 +76,12 @@ docker compose up -d postgres18
 docker compose up -d redis
 ```
 
+如果只单独启动 Temporal：
+
+```bash
+docker compose up -d temporal
+```
+
 查看状态：
 
 ```bash
@@ -79,6 +93,7 @@ docker compose ps
 ```bash
 docker compose logs -f postgres18
 docker compose logs -f redis
+docker compose logs -f temporal
 ```
 
 停止服务：
@@ -127,6 +142,29 @@ redis://localhost:${REDIS_PORT}
 redis://:${REDIS_PASSWORD}@localhost:${REDIS_PORT}
 ```
 
+### Temporal
+
+宿主机项目使用：
+
+```text
+Address: 127.0.0.1:${TEMPORAL_GRPC_PORT}
+Protocol: gRPC
+UI: http://127.0.0.1:${TEMPORAL_UI_PORT}
+```
+
+每个项目首次接入时创建独立 Namespace，例如：
+
+```bash
+docker compose exec temporal temporal operator namespace create \
+  --address 127.0.0.1:7233 \
+  --namespace project-a-local \
+  --retention 72h
+```
+
+Namespace 建议使用 `<project>-local` 命名。项目还应使用带项目前缀的 Task Queue，并只启动
+轮询本项目 Namespace 的 Worker。共享实例适合日常本地开发；会清空状态、修改集群级配置或
+验证特定 Temporal Server 版本的自动化测试，应启动独立临时环境。
+
 ## Docker 项目如何连接
 
 如果你的应用也运行在 Docker 里，并显式加入了同一个 `local-infra` 网络，则可以直接使用容器名访问：
@@ -136,6 +174,7 @@ Postgres host: postgres18
 Postgres port: 5432
 Redis host: redis
 Redis port: 6379
+Temporal gRPC address: temporal:7233
 ```
 
 其他 Compose 项目需要额外声明这个外部网络，例如：
@@ -185,12 +224,14 @@ postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:${POSTGRES_PORT}/pr
 volumes:
   - postgres18_data:/var/lib/postgresql
   - redis_data:/data
+  - temporal_data:/home/temporal
 ```
 
 含义是：
 
 - `postgres18_data` 保存 PostgreSQL 数据。
 - `redis_data` 保存 Redis 持久化文件。
+- `temporal_data` 保存共享 Temporal 的 SQLite 数据、Workflow、Schedule 和 History。
 - 容器删除并重建后，只要不删除这些卷，数据就会保留。
 
 查看卷：
@@ -204,6 +245,7 @@ docker volume ls
 ```bash
 docker volume rm local-containers_postgres18_data
 docker volume rm local-containers_redis_data
+docker volume rm local-containers_temporal_data
 ```
 
 ## 重要说明
@@ -216,3 +258,5 @@ docker volume rm local-containers_redis_data
 - `REDIS_PASSWORD` 留空时，Redis 不启用认证，适合本机单人开发环境。
 - 如果你启用了 `REDIS_PASSWORD`，其他项目的连接串也要同步改成 `redis://:${REDIS_PASSWORD}@host:port`。
 - Redis 修改密码后通常需要重建容器，避免运行参数和文档不一致。
+- Temporal 是所有本地项目共享的开发服务；停止容器会中断所有项目，删除数据卷会清空全部
+  Namespace 的本地状态。

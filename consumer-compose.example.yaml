@@ -5,6 +5,7 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@postgres18:5432/${APP_POSTGRES_DB:-project_a}
       REDIS_URL: ${APP_REDIS_URL:-redis://redis:6379}
+      TEMPORAL_ADDRESS: ${APP_TEMPORAL_ADDRESS:-temporal:7233}
     networks:
       - local-infra
 
