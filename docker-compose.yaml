@@ -13,7 +13,7 @@ services:
       TZ: ${TZ}
       PGTZ: ${TZ}
     ports:
-      - "${POSTGRES_PORT}:5432"
+      - "127.0.0.1:${POSTGRES_PORT}:5432"
     volumes:
       - postgres18_data:/var/lib/postgresql
     healthcheck:
@@ -59,7 +59,7 @@ services:
       - local-infra
 
   temporal:
-    image: temporalio/temporal:1.7.2
+    image: temporalio/temporal:1.10.0
     container_name: temporal
     restart: unless-stopped
     command:
@@ -70,8 +70,8 @@ services:
       - --db-filename
       - /home/temporal/temporal.db
     ports:
-      - "${TEMPORAL_GRPC_PORT:-7233}:7233"
-      - "${TEMPORAL_UI_PORT:-8233}:8233"
+      - "127.0.0.1:${TEMPORAL_GRPC_PORT:-7233}:7233"
+      - "127.0.0.1:${TEMPORAL_UI_PORT:-8233}:8233"
     volumes:
       - temporal_data:/home/temporal
     healthcheck:

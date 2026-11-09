@@ -4,7 +4,7 @@
 
 - PostgreSQL 18
 - Redis 8
-- Temporal CLI dev server（含 UI）
+- Temporal CLI 1.10.0 dev server（含 UI）
 
 它们的定位是给多个本地项目共用，而不是每个项目各自启动一套。
 
@@ -17,6 +17,7 @@
 
 ## 当前设计
 
+- PostgreSQL 和 Temporal 的宿主机端口仅绑定 `127.0.0.1`，供本机项目使用；容器间仍可通过 `local-infra` 网络连接。
 - PostgreSQL 通过 `localhost:${POSTGRES_PORT}` 提供给宿主机项目使用。
 - Redis 通过 `localhost:${REDIS_PORT}` 提供给宿主机项目使用。
 - Temporal 通过 `localhost:${TEMPORAL_GRPC_PORT}` 提供 gRPC，通过
@@ -57,6 +58,14 @@ TZ=Asia/Shanghai
 `REDIS_PASSWORD` 默认留空，表示本机开发环境下不启用认证；如果你要启用认证，填入密码后重建 Redis 容器即可。
 
 ## 启动
+
+暂不使用 Redis 时，只启动 PostgreSQL 和 Temporal：
+
+```bash
+docker compose up -d --wait postgres18 temporal
+```
+
+如遇 Docker socket 权限错误，在命令前加 `sudo`，例如 `sudo docker compose ps`。
 
 启动全部服务：
 
@@ -103,6 +112,20 @@ docker compose down
 ```
 
 注意：`docker compose down` 不会删除命名卷，因此数据库和缓存数据会保留。
+
+## 更新镜像
+
+PostgreSQL 的 `postgres:18` 标签跟随 18 系列更新，无需升级主版本。Temporal 固定为
+`temporalio/temporal:1.10.0`（CLI 版本，内置 Temporal Server 1.32.2）；后续升级需显式修改镜像标签。
+
+只更新当前使用的 PostgreSQL 和 Temporal：
+
+```bash
+docker compose pull postgres18 temporal
+docker compose up -d --wait postgres18 temporal
+```
+
+更新前应备份需要保留的数据；以上命令会保留命名卷，重建服务时会短暂中断连接。
 
 ## 宿主机项目如何连接
 
