@@ -92,10 +92,41 @@ services:
     networks:
       - local-infra
 
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.8.33.6-alpine@sha256:87e0a5b72f5465b18eacca7c76850e7ff551c9795c50e451f5646299e5e24146
+    profiles: [analytics]
+    container_name: clickhouse
+    restart: unless-stopped
+    cpus: 2
+    mem_limit: 4g
+    memswap_limit: 4g
+    environment:
+      CLICKHOUSE_USER: local_admin
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?请在 .env 中配置 ClickHouse 管理密码}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    ports:
+      - "127.0.0.1:${CLICKHOUSE_HTTP_PORT:-8123}:8123"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    networks:
+      - local-infra
+    healthcheck:
+      test: [CMD, wget, --quiet, --spider, 'http://127.0.0.1:8123/ping']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    ulimits:
+      nofile: {soft: 262144, hard: 262144}
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+
 volumes:
   postgres18_data:
   redis_data:
   temporal_data:
+  clickhouse_data:
 
 networks:
   local-infra:

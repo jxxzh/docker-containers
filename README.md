@@ -1,4 +1,4 @@
-# 本机全局共享 PostgreSQL 18 / Redis / Temporal
+# 本机全局共享 PostgreSQL 18 / Redis / Temporal / ClickHouse
 
 这个目录用于启动一组本机长期运行的基础容器，当前包含：
 
@@ -283,3 +283,19 @@ docker volume rm local-containers_temporal_data
 - Redis 修改密码后通常需要重建容器，避免运行参数和文档不一致。
 - Temporal 是所有本地项目共享的开发服务；停止容器会中断所有项目，删除数据卷会清空全部
   Namespace 的本地状态。
+
+## 可选 ClickHouse
+
+报表开发按需启动，默认 `up -d` 不启动 analytics profile：
+
+```bash
+docker compose --profile analytics up -d --wait clickhouse
+```
+
+先在 `.env` 配置独立随机的 `CLICKHOUSE_PASSWORD`。镜像固定为与 wz-internal
+生产一致的 25.8.33.6 和 digest；HTTP 仅绑定 127.0.0.1:8123，native 不发布。
+容器地址为 `clickhouse:8123`，数据保存在 `clickhouse_data` 命名卷。
+`local_admin` 只用于本机建库授权；项目各自创建数据库和受限账号，业务迁移留在项目中。
+健康检查 `/ping` 只证明服务响应，项目接入还须验证认证、建表及读写。
+不把本机 Compose 用作生产部署入口，也不将任何项目的业务表或生产密码放进这里。
+维护只选择目标服务，不对共享栈执行 down 或删除卷。
