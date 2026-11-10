@@ -295,6 +295,11 @@ docker compose --profile analytics up -d --wait clickhouse
 先在 `.env` 配置独立随机的 `CLICKHOUSE_PASSWORD`。镜像固定为与 wz-internal
 生产一致的 25.8.33.6 和 digest；HTTP 仅绑定 127.0.0.1:8123，native 不发布。
 容器地址为 `clickhouse:8123`，数据保存在 `clickhouse_data` 命名卷。
+本机通过 `clickhouse/config.xml` 使用轻量配置：后台调度池 16、合并池 4，
+mark 缓存上限 256 MiB、解压缓存上限 64 MiB，关闭查询缓存及系统查询／跟踪／指标日志，
+服务日志保留 warning 及以上级别并滚动。历史系统日志表仍保留，不自动清理。
+容器内存上限保持 4 GiB，ClickHouse 跟踪内存上限为 3 GiB；这些上限不代表预分配。
+修改配置后仅重建本服务：`docker compose --profile analytics up -d --no-deps --force-recreate --wait clickhouse`。
 `local_admin` 只用于本机建库授权；项目各自创建数据库和受限账号，业务迁移留在项目中。
 健康检查 `/ping` 只证明服务响应，项目接入还须验证认证、建表及读写。
 不把本机 Compose 用作生产部署入口，也不将任何项目的业务表或生产密码放进这里。
